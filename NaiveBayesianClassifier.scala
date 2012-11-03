@@ -9,7 +9,7 @@ class NaiveBayesianClassifier(dataset: Dataset) extends Classifier {
       dataset.features.map { feature => 
         p.get( (_class, feature, xs(feature)) ) match {
           case Some(pp) => pp
-          case None => 1.0
+          case None => 1e-70
         }
       }.foldLeft(p_class(_class))(_ * _)
     })
@@ -29,7 +29,7 @@ class NaiveBayesianClassifier(dataset: Dataset) extends Classifier {
     } yield {
       val xs = classInstances.filter(_.attributes(feature) == value)
       val key = (_class, feature, value)
-      //key -> xs.map(_.weight).sum / classInstances.map(_.weight).sum
-      key -> xs.size / classInstances.size.toDouble
+      key -> xs.map(_.weight).sum / classInstances.map(_.weight).sum
+      //key -> xs.size / classInstances.size.toDouble
     }).toMap
 }

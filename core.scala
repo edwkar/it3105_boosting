@@ -77,7 +77,7 @@ object Dataset {
       (x: String) => x.toInt
     else {
       val (minVal, maxVal) = (asDoubles.min, asDoubles.max)
-      val numBins = 5
+      val numBins = 3 
       val binWidth = (maxVal-minVal)/numBins
       val bins = for (i <- 0 until numBins) 
                    yield ((minVal+i*binWidth, minVal+(i+1)*binWidth), i+1)

@@ -7,55 +7,36 @@ class AdaBoostClassifier(classifierTrainers: List[ClassifierTrainer])
     val votes = hypotheses.map {
       case (h, z) => (h.classify(v), z)
     }
-    val bestAnswer = trainingSet.classes.maxBy {
-      case c1 => (votes.collect {
-        case (Some(c2), z) if c1 == c2 => z
+    val bestAnswer = (None :: (trainingSet.classes.map(c => Some(c)).toList)).maxBy {
+      case x => (votes.collect {
+        case (vote, z) if vote == x => z
       }.sum)
     }
-    Some(bestAnswer)
-    hypotheses(0)._1.classify(v)
+    bestAnswer
   }
 
-  private val hypotheses = build(trainingSet, classifierTrainers)
+  private val hypotheses = build(trainingSet, classifierTrainers, true)
 
-  private def build(_weightedInstances: Dataset, 
-                    trainers: List[ClassifierTrainer]): List[(Classifier, Double)] = 
+  private def build(weightedInstances: Dataset, 
+                    trainers: List[ClassifierTrainer],
+                    isFirstTrainer: Boolean = false): List[(Classifier, Double)] = 
     trainers match {
       case Nil => Nil
 
       case (trainer :: remTrainers) => {
-        val minWeight = _weightedInstances.map(_.weight).min
-        val maxWeight = _weightedInstances.map(_.weight).max
-        var scaleDown = 1.0
-        while ((maxWeight/minWeight)/scaleDown >= 500) {
-          println((maxWeight/minWeight)/scaleDown)
-          scaleDown *= 1.5 
-        }
-        val weightedInstances = new Dataset(Dataset.normalizeWeights(for {
-          inst <- _weightedInstances.instances
-          cnt = 1 + math.round((inst.weight/minWeight)/scaleDown).toInt
-          k <- 0 until cnt
-        } yield inst).toSeq)
-
-
         val classifier = trainer(weightedInstances)
-        //classifier match {
-         // case dtc: DecisionTreeClassifier => println(DecisionTreeClassifier.describe(dtc))
-        //}
+        println(classifier)
 
-        val error = _weightedInstances.map { 
+        val error = math.max(1e-8, weightedInstances.map { 
           case Instance(attributes, _class, weight) =>
             if (classifier.classify(attributes) != Some(_class))
               weight
             else
               0
-        }.sum
+        }.sum)
         
-        println("error: " + error)
-        println("error: " + error/(1-error))
-
         val reWeightedInstances = new Dataset(Dataset.normalizeWeights(
-          _weightedInstances.toSeq.map { 
+          weightedInstances.toSeq.map { 
             case instance@Instance(attributes, _class, weight) =>
               if (classifier.classify(attributes) == Some(_class))
                 Instance(attributes, _class, weight * error/(1-error))
@@ -65,11 +46,16 @@ class AdaBoostClassifier(classifierTrainers: List[ClassifierTrainer])
         ))
 
         println("ERROR: " + error)
-        val z = math.log((1-error)/error)
-        if (error >= 0.5)
+        //val z = math.log((1-error+1e-6) / error)
+        val z = math.log(1.0/error) //TODO
+        //println(z)
+        
+        if (!isFirstTrainer && math.abs(error-0.5) <= 1e-6)
           Nil
-        else  
+        else {
+          println("got it")
           (classifier, z) :: build(reWeightedInstances, remTrainers)
+        }
       }
     }
 }

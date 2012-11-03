@@ -89,6 +89,10 @@ object Main {
           dataset,
           if (maxDepth == -1) dataset.features.size else maxDepth
         )
+    },
+
+    "stump" -> classifierReader(){ _ =>
+      (dataset: Dataset) => new StumpClassifier(dataset)
     }
   ).toMap
 

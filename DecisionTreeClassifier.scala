@@ -25,7 +25,7 @@ object DecisionTreeClassifier {
     def information(p: Seq[Instance]): Double = {
       val res = - p.groupBy(_._class).values.map { s_i =>
         val p_s_i = s_i.size/p.size.toDouble
-        //jval k = (s_i.map(_.weight).sum/p.map(_.weight).sum) * p_s_i * math.log(p_s_i)/math.log(2)
+        //val k = (s_i.map(_.weight).sum/p.map(_.weight).sum) * p_s_i * math.log(p_s_i)/math.log(2)
         val k = p_s_i * math.log(p_s_i)/math.log(2)
         k
       }.sum
@@ -35,8 +35,8 @@ object DecisionTreeClassifier {
     def R(f: Attribute): Double = {
       val partitions = instances.groupBy(_.attributes(f)).values.toList
       partitions.map { p =>
-        //(p.map(_.weight).sum / instances.map(_.weight).sum) * information(p)
-        p.size / instances.size.toDouble * information(p)
+        information(p) / p.map(_.weight).sum
+        //p.size / instances.size.toDouble * information(p)
       }.sum
     }
 
