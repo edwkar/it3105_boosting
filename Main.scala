@@ -87,7 +87,7 @@ object Main {
       (dataset: Dataset) => 
         DecisionTreeClassifier.buildFor(
           dataset,
-          if (maxDepth == -1) dataset.features.size else maxDepth
+          if (maxDepth == -1) dataset.attributes.size else maxDepth
         )
     },
 

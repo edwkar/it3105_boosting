@@ -7,10 +7,10 @@ case class Unknown() extends DecisionTreeClassifier {
   def classify(xs: AttributeValueSeq) = None
 }
 case class Branch(
-  feature: Attribute, 
+  attribute: Attribute, 
   choices: Map[AttributeValue, DecisionTreeClassifier]
 ) extends DecisionTreeClassifier {
-  def classify(xs: AttributeValueSeq) = choices.get(xs(feature)) match {
+  def classify(xs: AttributeValueSeq) = choices.get(xs(attribute)) match {
     case Some(classifier) => classifier.classify(xs)
     case None => Some(1) // TODO FIXME
   }
@@ -21,75 +21,98 @@ case class Leaf(_class: Class) extends DecisionTreeClassifier {
 
 
 object DecisionTreeClassifier {
-  def chooseAttribute(features: Set[Attribute], instances: Seq[Instance]): Attribute = {
-    def information(p: Seq[Instance]): Double = {
-      val res = - p.groupBy(_._class).values.map { s_i =>
-        val p_s_i = s_i.size/p.size.toDouble
-        //val k = (s_i.map(_.weight).sum/p.map(_.weight).sum) * p_s_i * math.log(p_s_i)/math.log(2)
-        val k = p_s_i * math.log(p_s_i)/math.log(2)
-        k
+  def chooseAttribute(
+    attributes: Set[Attribute], 
+    instances: Seq[Instance],
+    parallelize: Boolean
+  ): Attribute = {
+    val ds = instances
+
+    def gainRatio(a: Attribute) = {
+      gain(a) / splitInfo(a)(ds)
+    }
+
+    def gain(a: Attribute) = 
+      info(ds) - infoSplit(ds, a)
+
+    def infoSplit(xs: Seq[Instance], a: Attribute) =
+      xs.groupBy(_.attributes(a)).values.map {
+        case ys: Seq[Instance] =>
+          val v = ys.map(_.weight).sum / xs.map(_.weight).sum
+          v * info(ys)
+      }.sum
+
+    def info(xs: Seq[Instance]) = {
+      val res = - xs.groupBy(_._class).values.map { 
+        case ys: Seq[Instance] => 
+          val v = ys.map(_.weight).sum / xs.map(_.weight).sum
+          v * math.log(v)/math.log(2)
       }.sum
       res
     }
 
-    def R(f: Attribute): Double = {
-      val partitions = instances.groupBy(_.attributes(f)).values.toList
-      partitions.map { p =>
-        information(p) / p.map(_.weight).sum
-        //p.size / instances.size.toDouble * information(p)
+    def splitInfo(a: Attribute)(xs: Seq[Instance]) = {
+      val res = - xs.groupBy(_.attributes(a)).values.map {
+        case ys: Seq[Instance] => 
+          assert { ys.map(_.attributes(a)).toSet.size == 1 }
+          val v = ys.map(_.weight).sum / xs.map(_.weight).sum
+          v * math.log(v)/math.log(2)
       }.sum
+      //println("si, " + a + "  = " + res)
+      res
     }
 
-    def gain(f: Attribute): Double =
-      information(instances) - R(f)
-    
-    //for (f <- features)
-     // println(f + " " + gain(f))
-    //println()
-
-    features.minBy(R)
-    //new scala.util.Random().shuffle(features.toSeq).minBy(R)
+    val bestAttribute = 
+      if (parallelize || true)
+        attributes.par.map((a: Attribute) => (a, gainRatio(a))).maxBy(_._2)._1
+      else  
+        attributes.map((a: Attribute) => (a, gainRatio(a))).maxBy(_._2)._1
+    bestAttribute
   }
 
   def buildFor(dataset: Dataset, 
                maxDepth: Int) = {
-    def qdt(features: Set[Attribute], 
+    def qdt(attributes: Set[Attribute], 
             instances: Seq[Instance], 
             depth: Int,
-            default: Class = dataset.toSeq(0)._class): DecisionTreeClassifier = {
+            default: Class = 
+              dataset.classes.maxBy(c => dataset.instances.filter(_._class == c).map(_.weight).sum)
+    ): DecisionTreeClassifier = {
       val classes = instances.map(_._class)
       val allInstancesAreSameClass = classes.toSet.size == 1
       val mostCommonClass = 
-        if (classes.isEmpty) default 
-        else classes.groupBy(x => x).maxBy(_._2.size)_1
+        if (classes.isEmpty) 
+          default 
+        else 
+          dataset.classes.maxBy(c => instances.filter(_._class == c).map(_.weight).sum)
      
       if (instances.isEmpty)
         Leaf(default)
       else if (allInstancesAreSameClass)
         Leaf(instances(0)._class)
-      else if (depth == maxDepth || features.isEmpty) 
+      else if (depth == maxDepth || attributes.isEmpty) 
         Leaf(mostCommonClass)
       else {
-        val bestAttribute = chooseAttribute(features, instances)
+        val bestAttribute = chooseAttribute(attributes, instances, depth <= 1)
         val classes = instances.map(_._class)
-        Branch(bestAttribute, dataset.featureOptions(bestAttribute).map { 
+        Branch(bestAttribute, dataset.attributeOptions(bestAttribute).par.map { 
           case v =>
-            v -> qdt(features-bestAttribute, 
+            v -> qdt(attributes-bestAttribute, 
                      instances.filter(_.attributes(bestAttribute) == v), 
                      depth+1, 
                      mostCommonClass)
-        }.toMap)
+        }.seq.toMap)
       }
     }
 
-    qdt(dataset.features.toSet, dataset.instances, 0)
+    qdt(dataset.attributes.toSet, dataset.instances, 0)
   }
 
   def describe(c: DecisionTreeClassifier, indent: String = ""): String = 
     c match {
       case Unknown() => indent + Red("RETURN UNKNOWN\n")
-      case Branch(feature, choices) => (
-          indent + Blue("SPLIT ON FEATURE ") + feature + "\n"
+      case Branch(attribute, choices) => (
+          indent + Blue("SPLIT ON FEATURE ") + attribute + "\n"
         + choices.map { case (v, cc) => (
               indent + Gray("|") + Yellow(" IF " + v) + Gray(" THEN\n")
             + describe(cc, indent + Gray("|   "))

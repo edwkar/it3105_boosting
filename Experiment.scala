@@ -3,7 +3,11 @@ import typeAliases._
 class Experiment(ct: ClassifierTrainer, ds: Dataset, trainingSetRatio: Double) {
   def run() {
     val trainingSetSize = math.floor(ds.size * trainingSetRatio).toInt
-    val (trainingSet, testingSet) = ds.shuffle.split(trainingSetSize)
+    val (trainingSet, testingSet) = 
+      if (trainingSetSize == ds.size)
+        (ds, ds)
+      else    
+        ds.shuffle.split(trainingSetSize)
     println("split...")
 
     val classifier = ct(trainingSet)

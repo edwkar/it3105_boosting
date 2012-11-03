@@ -17,11 +17,13 @@ class Dataset(val instances: Seq[Instance]) extends Traversable[Instance] {
   require(math.abs(instances.map(_.weight).sum-1.0) <= 1e-4, 
           "Weights must sum to 1. Current weight sum is: " + instances.map(_.weight).sum)
 
-  val features: Seq[Int] = (0 until instances(0).attributes.size)
+  println(instances(0))
+  val attributes: List[Int] = (0 until (instances(0).attributes.size)).toList
+  println(attributes)
   val classes: Set[Int] = instances.map(_._class).toSet
 
-  val featureOptions: Map[Attribute, Set[AttributeValue]] = (
-    for (f <- features)
+  val attributeOptions: Map[Attribute, Set[AttributeValue]] = (
+    for (f <- attributes)
       yield f -> Set(instances.map(_.attributes(f)) : _*)
   ).toMap
 
@@ -77,7 +79,7 @@ object Dataset {
       (x: String) => x.toInt
     else {
       val (minVal, maxVal) = (asDoubles.min, asDoubles.max)
-      val numBins = 3 
+      val numBins = 1
       val binWidth = (maxVal-minVal)/numBins
       val bins = for (i <- 0 until numBins) 
                    yield ((minVal+i*binWidth, minVal+(i+1)*binWidth), i+1)
