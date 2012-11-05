@@ -4,10 +4,10 @@ class AdaBoostClassifier(classifierTrainers: List[ClassifierTrainer])
                         (trainingSet: Dataset) extends Classifier {
 
   override def classify(v: AttributeValueSeq) = {
-    val votes = hypotheses.map {
+    val votes = hypotheses.par.map {
       case (h, z) => (h.classify(v), z)
     }
-    val bestAnswer = (None :: (trainingSet.classes.map(c => Some(c)).toList)).maxBy {
+    val bestAnswer = (None :: (trainingSet.classes.map(c => Some(c)).toList)).par.maxBy {
       case x => (votes.collect {
         case (vote, z) if vote == x => z
       }.sum)
@@ -52,7 +52,7 @@ class AdaBoostClassifier(classifierTrainers: List[ClassifierTrainer])
         //val z = math.log(1.0/error) //TODO
         //println(z)
         
-        if (!isFirstTrainer && (math.abs(error-0.5) <= 1e-8 || math.abs(error-0.0) <= 1e-8))
+        if (!isFirstTrainer && (error >= 0.5-1e-8 || error < 1e-7))
           Nil
         else {
           println("got it")
