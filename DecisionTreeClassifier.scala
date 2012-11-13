@@ -2,28 +2,47 @@ import aliases._
 import utils._
 
 
-sealed abstract class DecisionTreeClassifier extends Classifier {
-  override def apply(xs: AttrValueSeq): Class
-}
-
-
-case class Branch(
-  attr: Attr,
-  choices: Map[AttrValue, DecisionTreeClassifier]
-) extends DecisionTreeClassifier {
-  override def apply(xs: AttrValueSeq) = choices.get(xs(attr)) match {
-    case Some(classifier) => classifier(xs)
-    case None => throw new Exception("lol")
-  }
-}
-
-
-case class Leaf(cls: Class) extends DecisionTreeClassifier {
-  def apply(xs: AttrValueSeq) = cls
-}
 
 
 object DecisionTreeClassifier {
+  def trainFor(dataset: Dataset, maxDepth: Int) = {
+    val mostCommonInWholeSet = dataset.classes.maxBy(c =>
+                                 dataset.instances.filter(_.cls == c).map(_.weight).sum)
+
+    def growTree(attrs: Set[Attr], instances: Seq[Instance], depth: Int,
+                 default: Class = mostCommonInWholeSet): DTC = {
+      val classes = instances.map(_.cls)
+      val allSameClass = classes.toSet.size == 1
+      val mostCommonClass =
+        if (classes.isEmpty)
+          default
+        else
+          dataset.classes.maxBy(c => instances.filter(_.cls == c).map(_.weight).sum)
+
+      if (instances.isEmpty)
+        Leaf(default)
+      else if (allSameClass || depth == maxDepth || attrs.isEmpty)
+        Leaf(mostCommonClass)
+      else {
+        val bestAttr = chooseAttr(attrs, instances)
+        val classes = instances.map(_.cls)
+        Branch(
+          bestAttr,
+          dataset.attrOptions(bestAttr).par.map {
+            case v =>
+              v -> growTree(attrs-bestAttr,
+                            instances.filter(_.attrs(bestAttr) == v),
+                            depth+1,
+                            mostCommonClass)
+          }.seq.toMap,
+          mostCommonClass
+        )
+      }
+    }
+
+    growTree(dataset.attrs.toSet, dataset.instances, 0)
+  }
+
   def chooseAttr(attrs: Set[Attr], instances: Seq[Instance]): Attr = {
     def gainRatio(a: Attr) = gain(a) / splitInfo(instances, a)
 
@@ -56,43 +75,26 @@ object DecisionTreeClassifier {
     bestAttr
   }
 
-  def trainFor(dataset: Dataset, maxDepth: Int) = {
-    val mostCommonInSet = dataset.classes.maxBy(c =>
-                            dataset.instances.filter(_.cls == c).map(_.weight).sum)
 
-    def growTree(attrs: Set[Attr], instances: Seq[Instance], depth: Int,
-                 default: Class = mostCommonInSet): DecisionTreeClassifier = {
-      val classes = instances.map(_.cls)
-      val allSameClass = classes.toSet.size == 1
-      val mostCommonClass =
-        if (classes.isEmpty)
-          default
-        else
-          dataset.classes.maxBy(c => instances.filter(_.cls == c).map(_.weight).sum)
+  sealed abstract class DTC extends Classifier
 
-      if (instances.isEmpty)
-        Leaf(default)
-      else if (allSameClass || depth == maxDepth || attrs.isEmpty)
-        Leaf(mostCommonClass)
-      else {
-        val bestAttr = chooseAttr(attrs, instances)
-        val classes = instances.map(_.cls)
-        Branch(bestAttr, dataset.attrOptions(bestAttr).par.map {
-          case v =>
-            v -> growTree(attrs-bestAttr,
-                          instances.filter(_.attrs(bestAttr) == v),
-                          depth+1,
-                          mostCommonClass)
-        }.seq.toMap)
-      }
+  case class Branch(
+    attr: Attr,
+    choices: Map[AttrValue, DTC],
+    fallbackChoice: Class
+  ) extends DTC {
+    override def apply(xs: AttrValueSeq) = choices.get(xs(attr)) match {
+      case Some(classifier) => classifier(xs)
+      case None => fallbackChoice
     }
-
-    growTree(dataset.attrs.toSet, dataset.instances, 0)
   }
 
-  def describe(c: DecisionTreeClassifier, indent: String = ""): String =
+  case class Leaf(cls: Class) extends DTC { def apply(xs: AttrValueSeq) = cls }
+
+
+  def describe(c: DTC, indent: String = ""): String =
     c match {
-      case Branch(attr, choices) => (
+      case Branch(attr, choices, fallbackChoice) => (
           indent + Blue("SPLIT ON FEATURE ") + attr + "\n"
         + choices.map { case (v, cc) => (
               indent + Gray("|") + Yellow(" IF " + v) + Gray(" THEN\n")

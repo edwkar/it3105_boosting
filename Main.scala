@@ -31,8 +31,10 @@ object Main {
             ((ds: Dataset) =>
               new AdaBoostClassifier(learnerConf)(ds))
 
-        val experiment = new Experiment(learner, dataset, trainingSetRatio)
-        experiment.run()
+        for (k <- 0 until 1) {
+          val experiment = new Experiment(learner, dataset, trainingSetRatio)
+          experiment.run()
+        }
       }
     }
   }
@@ -51,7 +53,7 @@ object Main {
   ./analyse [file] [training set ratio] [(N*)classifier([opt...])...]
 
 """ + Yellow("EXAMPLE:") + """
-  ./analyse foo.cls 0.8 5*naivebayesian,2*decisiontree(maxDepth=A)
+  ./analyse foo.cls 0.8 5*nb,2*dt(maxDepth=A)
 
   Analyse the data set given in foo.cls, using 80% of the set for training.
   Use AdaBoost with five Naive Bayesian Classifiers, and two decision trees
@@ -108,11 +110,11 @@ object learnerConfReader {
   }
 
   private val LEARNER_READERS = List(
-    "naivebayesian" -> learnerReader(){ _ =>
+    "nb" -> learnerReader(){ _ =>
       (dataset: Dataset) => new NaiveBayesianClassifier(dataset)
     },
 
-    "decisiontree" -> learnerReader(
+    "dt" -> learnerReader(
       "maxDepth" -> ((x: String) => x == "A" || x.forall(_.isDigit))
     ){ opts =>
       val maxDepth = opts.get("maxDepth") match {

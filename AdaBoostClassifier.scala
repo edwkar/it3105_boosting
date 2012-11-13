@@ -2,7 +2,6 @@ import aliases._
 
 class AdaBoostClassifier(learners: List[Learner])
                         (trainingSet: Dataset) extends Classifier {
-
   override def apply(v: AttrValueSeq) = {
     val votes = hypotheses.par.map {
       case (h, a) => (h(v), a)
@@ -19,19 +18,17 @@ class AdaBoostClassifier(learners: List[Learner])
 
   private val hypotheses = train(trainingSet, learners, true)
 
-  private def train(weightedInstances: Dataset,
-                    trainers: List[Learner],
-                    isFirstLearner: Boolean = false): List[(Classifier, Double)] = {
-    val K = weightedInstances.classes.size
+  private def train(instances: Dataset, trainers: List[Learner],
+                    isFirst: Boolean = false): List[(Classifier, Double)] = {
+    val K = instances.classes.size
+
     trainers match {
       case Nil => Nil
 
       case (trainer :: remLearners) => {
-        val classifier = trainer(weightedInstances)
+        val classifier = trainer(instances)
 
-        assert { math.abs(weightedInstances.instances.map(_.weight).sum-1.0) < 1e-6 }
-
-        val error = math.max(1e-8, weightedInstances.map {
+        val err = math.max(1e-10, instances.map {
           case Instance(attrs, cls, weight) =>
             if (classifier(attrs) != cls)
               weight
@@ -39,25 +36,22 @@ class AdaBoostClassifier(learners: List[Learner])
               0
         }.sum)
 
+        val a = math.log((1-err)/err) + math.log(K-1)
 
-        val a = math.log((1-error) / error) + math.log(K-1)
-
-        val reWeightedInstances = new Dataset(Dataset.normalizeWeights(
-          weightedInstances.toSeq.map {
+        val reWeighted = new Dataset(Dataset.normalizeWeights(
+          instances.toSeq.map {
             case instance@Instance(attrs, cls, weight) =>
               val newWeight = weight * math.exp(a * (if (classifier(attrs) != cls) 1 else 0))
+              assert(!newWeight.isNaN)
               Instance(attrs, cls, newWeight)
           }
         ))
 
-        println("ERROR: " + error)
-
-        if (!isFirstLearner && (1-error) < 1.0/K)
-          Nil
-        else {
-          println("got it")
-          (classifier, a) :: train(reWeightedInstances, remLearners)
-        }
+        printf("error=%.2f alpha=%.2f...\n", err, a)
+        if (!isFirst && (1-err) < 1.0/K)
+          Nil //train(instances, remLearners)
+        else
+          (classifier, a) :: train(reWeighted, remLearners)
       }
     }
   }
