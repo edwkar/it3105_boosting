@@ -1,34 +1,33 @@
-import typeAliases._
+import aliases._
 
 class NaiveBayesianClassifier(dataset: Dataset) extends Classifier {
-  type Key = (Class, Attribute, AttributeValue)
+  type Key = (Class, Attr, AttrValue)
   type Probability = Double
 
-  def classify(xs: AttributeValueSeq) = 
-    Some(dataset.classes.par.maxBy { _class => 
-      dataset.attributes.map { attribute => 
-        p.get( (_class, attribute, xs(attribute)) ) match {
+  override def apply(xs: AttrValueSeq) =
+    dataset.classes.par.maxBy { cls =>
+      dataset.attrs.map { attr =>
+        p.get( (cls, attr, xs(attr)) ) match {
           case Some(pp) => pp
-          case None => 1e-70
+          case None => 1E-5
         }
-      }.foldLeft(p_class(_class))(_ * _)
-    })
-  
-  private val p_class: Map[Class, Probability] = 
-    (for (c <- dataset.classes) 
-      yield c -> dataset.par.filter(_._class == c).map(_.weight).sum
+      }.foldLeft(p_cls(cls))(_ * _)
+    }
+
+  private val p_cls: Map[Class, Probability] =
+    (for (c <- dataset.classes)
+      yield c -> dataset.par.filter(_.cls == c).map(_.weight).sum
     ).toMap
 
 
-  private val p: Map[Key, Probability] = 
+  private val p: Map[Key, Probability] =
     (for {
-      (_class, classInstances) <- dataset.par.groupBy(_._class)
-      attribute <- dataset.attributes.par
-      value <- dataset.attributeOptions(attribute)
+      (cls, classInstances) <- dataset.groupBy(_.cls)
+      attr <- dataset.attrs.par
+      value <- dataset.attrOptions(attr)
     } yield {
-      val xs = classInstances.filter(_.attributes(attribute) == value)
-      val key = (_class, attribute, value)
+      val xs = classInstances.filter(_.attrs(attr) == value)
+      val key = (cls, attr, value)
       key -> xs.map(_.weight).sum / classInstances.map(_.weight).sum
-      //key -> xs.size / classInstances.size.toDouble
     }).seq.toMap
 }
