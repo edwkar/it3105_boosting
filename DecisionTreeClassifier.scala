@@ -5,6 +5,8 @@ import utils._
 
 
 object DecisionTreeClassifier {
+  val R = new scala.util.Random()
+
   def trainFor(dataset: Dataset, maxDepth: Int) = {
     val mostCommonInWholeSet = dataset.classes.maxBy(c =>
                                  dataset.instances.filter(_.cls == c).map(_.weight).sum)
@@ -44,9 +46,11 @@ object DecisionTreeClassifier {
   }
 
   def chooseAttr(attrs: Set[Attr], instances: Seq[Instance]): Attr = {
-    def gainRatio(a: Attr) = gain(a) / splitInfo(instances, a)
+    // TODO!
+    def gainRatio(a: Attr) =
+        gain(a) / math.max(1e-8, splitInfo(instances, a))
 
-    def gain(a: Attr) = info(instances) - infoSplitted(instances, a)
+    def gain(a: Attr) = /*info(instances) -*/ - infoSplitted(instances, a)
 
     def info(xs: Seq[Instance]) =
       - xs.groupBy(_.cls).values.map {
@@ -59,6 +63,7 @@ object DecisionTreeClassifier {
       xs.groupBy(_.attrs(a)).values.map {
         case ys: Seq[Instance] =>
           val v = ys.map(_.weight).sum / xs.map(_.weight).sum
+          //val v = ys.size / xs.size.toDouble
           v * info(ys)
       }.sum
 
@@ -66,12 +71,14 @@ object DecisionTreeClassifier {
       - xs.groupBy(_.attrs(a)).values.map {
         case ys: Seq[Instance] =>
           assert { ys.map(_.attrs(a)).toSet.size == 1 }
-          val v = ys.map(_.weight).sum / xs.map(_.weight).sum
+          //val v = ys.map(_.weight).sum / xs.map(_.weight).sum
+          val v = ys.size / xs.size.toDouble
           v * math.log(v)/math.log(2)
       }.sum
 
     val bestAttr =
-      attrs.par.map((a: Attr) => (a, gainRatio(a))).maxBy(_._2)._1
+      R.shuffle(attrs.toList).par.map((a: Attr) => (a, gainRatio(a))).maxBy(_._2)._1
+      //attrs.par.map((a: Attr) => (a, gainRatio(a))).maxBy(_._2)._1
     bestAttr
   }
 

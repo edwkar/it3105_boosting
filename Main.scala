@@ -25,7 +25,7 @@ object Main {
 
         val isSingleClassifierRun = learnerConf.size == 1
         val learner =
-          if (isSingleClassifierRun)
+          if (false && /*TODO*/isSingleClassifierRun)
             learnerConf.head
           else
             ((ds: Dataset) =>
