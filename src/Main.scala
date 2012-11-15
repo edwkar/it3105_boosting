@@ -2,21 +2,51 @@ import aliases._
 import utils._
 
 
-class Experiment(ct: Learner, ds: Dataset, trainingSetRatio: Double) {
-  def run() {
-    val trainingSetSize = math.floor(ds.size * trainingSetRatio).toInt
-    val (trainingSet, testingSet) =
-      if (trainingSetSize == ds.size)
-        (ds, ds)
-      else
-        ds.shuffle.split(trainingSetSize)
+object Main {
+  def main(args: Array[String]) {
+    val argsRegex = """^(\S+)\s+(\S+)\s+(\S+)$""".r
 
-    val classifier = ct(trainingSet)
+    argsRegex.findFirstIn(args.mkString(" ")) match {
+      case None =>
+        printHelpAndQuit("Invalid command line string.")
 
-    println(Yellow("TRAINING SET SIZE: ") + trainingSetSize + "\n")
-    println(Yellow("CLASSIFIER"))
-    println(Blue("TRAINING:  ") + visualise(classifier.performanceOn(trainingSet)))
-    println(Blue("TEST    :  ") + visualise(classifier.performanceOn(testingSet)))
+      case Some(argsRegex(trainingSetPath,
+                          testingSetPath,
+                          learnerConfRaw)) => {
+        val (trainingSet, testingSet) = try {
+          import Dataset.{fromCSVFile => read}
+          (read(trainingSetPath), read(testingSetPath))
+        } catch {
+          case ex => printHelpAndQuit(ex.getMessage)
+        }
+
+        val learnerConf = learnerConfReader.parse(learnerConfRaw)
+
+        val isSingleClassifierRun = learnerConf.size == 1
+        val learner = if (isSingleClassifierRun)
+                        learnerConf.head
+                      else
+                        ((ds: Dataset) =>
+                          new AdaBoostClassifier(learnerConf)(ds))
+
+        trainAndTest(learner, trainingSet, testingSet)
+      }
+    }
+  }
+
+  def trainAndTest(learner: Learner, trainingSet: Dataset, testingSet: Dataset) {
+    val classifier = learner(trainingSet)
+    val trainingPerformance = classifier.performanceOn(trainingSet)
+    val testingPerformance = classifier.performanceOn(testingSet)
+
+    println(Yellow("TRAINING SET SIZE: ") + trainingSet.size + "\n")
+    println(Blue("TRAINING:  ") + visualise(trainingPerformance))
+    println(Blue("TEST    :  ") + visualise(testingPerformance))
+
+    println("Error on training data")
+    println("Correctly Classified Instances " + trainingPerformance._1)
+    println("Error on test data")
+    println("Correctly Classified Instances " + testingPerformance._1)
   }
 
   private def visualise(xs: (Int, Int, Double)) = xs match {
@@ -25,46 +55,6 @@ class Experiment(ct: Learner, ds: Dataset, trainingSetRatio: Double) {
       (Gray("|") + Green("-")*split + Red("-")*(55-split) + Gray("|") +
       " " + "%-22s".format(numCorrect + "/" + Gray(numTotal)) +
             Yellow("%.2f%%".format(100.0*numCorrect/numTotal.toDouble)))
-    }
-  }
-}
-
-
-object Main {
-  def main(args: Array[String]) {
-    val argsRegex = """^(\S+)\s+(\d+\.?\d*)\s+(\S+)$""".r
-
-    argsRegex.findFirstIn(args.mkString(" ")) match {
-      case None =>
-        printHelpAndQuit("Invalid command line string.")
-
-      case Some(argsRegex(datafilePath, trainingSetRatioRaw,
-                          learnerConfRaw)) => {
-        val dataset: Dataset = try {
-          Dataset.fromCSVFile(datafilePath)
-        } catch {
-          case ex => printHelpAndQuit(ex.getMessage)
-        }
-
-        val trainingSetRatio = trainingSetRatioRaw.toDouble
-        requireOrQuit(0 < trainingSetRatio && trainingSetRatio <= 1.0,
-                      "Training set ratio must be in <0, 1]")
-
-        val learnerConf = learnerConfReader.parse(learnerConfRaw)
-
-        val isSingleClassifierRun = learnerConf.size == 1
-        val learner =
-          if (false && /*TODO*/isSingleClassifierRun)
-            learnerConf.head
-          else
-            ((ds: Dataset) =>
-              new AdaBoostClassifier(learnerConf)(ds))
-
-        for (k <- 0 until 1) {
-          val experiment = new Experiment(learner, dataset, trainingSetRatio)
-          experiment.run()
-        }
-      }
     }
   }
 
@@ -79,14 +69,10 @@ object Main {
 
     println("""
 """ + Yellow("USAGE:") + """
-  ./analyse [file] [training set ratio] [(N*)classifier([opt...])...]
+  ./analyse [training file] [testing file] [(N*)classifier([opt...])...]
 
 """ + Yellow("EXAMPLE:") + """
-  ./analyse foo.cls 0.8 5*nb,2*dt(maxDepth=A)
-
-  Analyse the data set given in foo.cls, using 80% of the set for training.
-  Use AdaBoost with five Naive Bayesian Classifiers, and two decision trees
-  with maximum depth equal to the number of attrs in foo.cls (A)
+  ./analyse foo.train foo.test 5*nb,2*dt(maxDepth=A)
   """)
 
     System.exit(0)
