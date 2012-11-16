@@ -4,6 +4,8 @@ object aliases {
   type AttrValueSeq = Seq[Attr]
   type Class = Int
   type Learner = Dataset => Classifier
+  type Weight = Double
+  type Error = Double
 }
 
 import aliases._

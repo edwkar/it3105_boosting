@@ -77,7 +77,7 @@ object DecisionTreeClassifier {
       }.sum
 
     val bestAttr =
-      R.shuffle(attrs.toList).par.map((a: Attr) => (a, gainRatio(a))).maxBy(_._2)._1
+      R.shuffle(attrs.toList).par.map((a: Attr) => (a, gain(a))).maxBy(_._2)._1
       //attrs.par.map((a: Attr) => (a, gainRatio(a))).maxBy(_._2)._1
     bestAttr
   }

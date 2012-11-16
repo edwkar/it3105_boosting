@@ -23,9 +23,10 @@ object Main {
         val learnerConf = learnerConfReader.parse(learnerConfRaw)
 
         val isSingleClassifierRun = learnerConf.size == 1
-        val learner = if (isSingleClassifierRun)
+        val learner = if (isSingleClassifierRun) {
+                        println("Uno")
                         learnerConf.head
-                      else
+                      } else
                         ((ds: Dataset) =>
                           new AdaBoostClassifier(learnerConf)(ds))
 

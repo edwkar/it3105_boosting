@@ -3,6 +3,7 @@ import aliases._
 class AdaBoostClassifier(learners: List[Learner])
                         (trainingSet: Dataset) extends Classifier {
   type AlphaVal = Double
+  type ClassCount = Int
 
   override def apply(v: AttrValueSeq) = {
     val votes = hypotheses.par.map {
@@ -18,10 +19,13 @@ class AdaBoostClassifier(learners: List[Learner])
     bestAnswer
   }
 
-  private val hypotheses = train(trainingSet, learners, true)
+  private val hypotheses = train(VARIANT_SAMME)(trainingSet, learners, true)
+  System.err.println(hypotheses.size)
 
-  private def train(instances: Dataset, learners: List[Learner],
-                    isFirst: Boolean = false): List[(Classifier, AlphaVal)] = {
+  private def train(variant: Variant)
+                   (instances: Dataset,
+                    learners: List[Learner],
+                    isFirst: Boolean): List[(Classifier, AlphaVal)] = {
     val K = instances.classes.size
 
     learners match {
@@ -40,7 +44,7 @@ class AdaBoostClassifier(learners: List[Learner])
               0
         }.toList.sorted.sum
 
-        val a = math.log((1-err)/(err+1e-14)) + math.log(K-1)
+        val a = variant.alphaFormula(err, K)
 
         val reWeighted = new Dataset(Dataset.normalizeWeights(
           instances.toSeq.map {
@@ -51,16 +55,32 @@ class AdaBoostClassifier(learners: List[Learner])
           }
         ))
         println(reWeighted.map(_.weight).sum)
-        println("min = " + reWeighted.map(_.weight).min)
-        println("max = " + reWeighted.map(_.weight).max)
+        //System.err.println("  > min = " + reWeighted.map(_.weight).min)
+        //System.err.println("  > max = " + reWeighted.map(_.weight).max)
+        //System.err.println("  > error=" + err + "  alpha=" + a)
 
-        printf("error=%.2f alpha=%.2f...\n", err, a)
-        if (!isFirst && (err == 0.0 || (1-err) <= 1.0/K-1E-3)) {
+        if (!isFirst && (err == 0.0 || err >= variant.maximumError(K))) {
           println("Aborting training...")
           Nil //train(instances, remLearners)
         } else
-          (h, a) :: train(reWeighted, remLearners)
+          (h, a) :: train(variant)(reWeighted, remLearners, false)
       }
     }
   }
+
+
+  class Variant(
+    val alphaFormula: (Error, ClassCount) => AlphaVal,
+    val maximumError: ClassCount => Error
+  )
+
+  lazy val VARIANT_M1 = new Variant(
+    (err, K) => math.log((1-err)/(err+1e-14)),
+    _ => 0.5
+  )
+
+  lazy val VARIANT_SAMME = new Variant(
+    (err, K) => math.log((1-err)/(err+1e-14)) + math.log(K-1),
+    K => 1.0 - 1.0/K
+  )
 }
