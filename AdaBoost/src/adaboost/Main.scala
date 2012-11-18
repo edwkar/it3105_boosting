@@ -1,3 +1,5 @@
+package adaboost;
+
 import aliases._
 import utils._
 
@@ -19,35 +21,33 @@ object Main {
         } catch {
           case ex => printHelpAndQuit(ex.getMessage)
         }
+        val learner = parseLearnerConf(learnerConfRaw)
 
-        val learnerConf = learnerConfReader.parse(learnerConfRaw)
-
-        val isSingleClassifierRun = learnerConf.size == 1
-        val learner = if (isSingleClassifierRun) {
-                        println("Uno")
-                        learnerConf.head
-                      } else
-                        ((ds: Dataset) =>
-                          new AdaBoostClassifier(learnerConf)(ds))
-
-        trainAndTest(learner, trainingSet, testingSet)
+        val (trainingPerformance, testingPerformance) =
+          trainAndTest(learner, trainingSet, testingSet)
+        println(Blue("TRAINING:  ") + visualise(trainingPerformance))
+        println(Blue("TEST    :  ") + visualise(testingPerformance))
       }
     }
   }
 
-  def trainAndTest(learner: Learner, trainingSet: Dataset, testingSet: Dataset) {
+  def trainAndTest(learner: Learner,
+                   trainingSet: Dataset, testingSet: Dataset) = {
     val classifier = learner(trainingSet)
     val trainingPerformance = classifier.performanceOn(trainingSet)
     val testingPerformance = classifier.performanceOn(testingSet)
+    (trainingPerformance, testingPerformance)
+  }
 
-    println(Yellow("TRAINING SET SIZE: ") + trainingSet.size + "\n")
-    println(Blue("TRAINING:  ") + visualise(trainingPerformance))
-    println(Blue("TEST    :  ") + visualise(testingPerformance))
+  def parseLearnerConf(conf: String): Learner = {
+    val learnerConf = learnerConfReader.parse(conf)
 
-    println("Error on training data")
-    println("Correctly Classified Instances " + trainingPerformance._1)
-    println("Error on test data")
-    println("Correctly Classified Instances " + testingPerformance._1)
+    val isSingleClassifierRun = learnerConf.size == 1
+    if (isSingleClassifierRun)
+      learnerConf.head
+    else
+      ((ds: Dataset) =>
+        new AdaBoostClassifier(learnerConf)(ds))
   }
 
   private def visualise(xs: (Int, Int, Double)) = xs match {
@@ -55,7 +55,7 @@ object Main {
       val split = (55*numCorrect/numTotal.toDouble).toInt
       (Gray("|") + Green("-")*split + Red("-")*(55-split) + Gray("|") +
       " " + "%-22s".format(numCorrect + "/" + Gray(numTotal)) +
-            Yellow("%.2f%%".format(100.0*numCorrect/numTotal.toDouble)))
+            Yellow("%.6f%%".format(100.0*numCorrect/numTotal.toDouble)))
     }
   }
 

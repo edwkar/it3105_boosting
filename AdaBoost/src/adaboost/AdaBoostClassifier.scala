@@ -1,10 +1,14 @@
+package adaboost;
+
 import aliases._
 
 class AdaBoostClassifier(learners: List[Learner])
                         (trainingSet: Dataset) extends Classifier {
   type AlphaVal = Double
+  type Support = Double
   type ClassCount = Int
 
+  /*
   override def apply(v: AttrValueSeq) = {
     val votes = hypotheses.par.map {
       case (h, a) => (h(v), a)
@@ -16,11 +20,36 @@ class AdaBoostClassifier(learners: List[Learner])
       }.sum)
     }
 
+    assert(bestAnswer == xapply(v))
     bestAnswer
   }
+  */
 
-  private val hypotheses = train(VARIANT_SAMME)(trainingSet, learners, true)
+  override def apply(v: AttrValueSeq) = {
+    def collectVotes(weightedHypotheses: List[(Classifier, AlphaVal)],
+                     cls2Support: Map[Class, Support]): Class =
+      weightedHypotheses match {
+        case Nil => cls2Support.maxBy(_._2)._1
+
+        case ((h, a) :: remHypotheses) =>
+          val vote = h(v)
+          val newClass2Support = cls2Support + (vote -> (cls2Support(vote) + a))
+          if (newClass2Support(vote) >= 0.5*maxAlphaSum)
+            vote
+          else
+            collectVotes(remHypotheses, newClass2Support)
+      }
+
+    collectVotes(hypotheses, trainingSet.classes.map(c => (c -> 0.0)).toMap)
+  }
+
+  private val hypotheses =
+    train(VARIANT_M1)(trainingSet, learners, true).sortBy(-_._2)
+  private val maxAlphaSum = hypotheses.map(_._2).sum
   System.err.println(hypotheses.size)
+  System.err.println(hypotheses.map(_._2).sum / hypotheses.size)
+  System.err.println(hypotheses.map(_._2).max)
+  System.err.println((hypotheses.map(_._2).max / ((hypotheses.map(_._2).sum / hypotheses.size))).toInt)
 
   private def train(variant: Variant)
                    (instances: Dataset,
@@ -55,12 +84,13 @@ class AdaBoostClassifier(learners: List[Learner])
           }
         ))
         println(reWeighted.map(_.weight).sum)
-        //System.err.println("  > min = " + reWeighted.map(_.weight).min)
-        //System.err.println("  > max = " + reWeighted.map(_.weight).max)
-        //System.err.println("  > error=" + err + "  alpha=" + a)
+        System.err.println("  > min = " + reWeighted.map(_.weight).min)
+        System.err.println("  > max = " + reWeighted.map(_.weight).max)
+        System.err.println("  > error=" + err + "  alpha=" + a)
 
         if (!isFirst && (err == 0.0 || err >= variant.maximumError(K))) {
-          println("Aborting training...")
+          System.err.println("Aborting training...")
+          //throw new Exception()
           Nil //train(instances, remLearners)
         } else
           (h, a) :: train(variant)(reWeighted, remLearners, false)

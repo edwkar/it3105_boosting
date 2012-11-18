@@ -1,3 +1,5 @@
+package adaboost;
+
 object aliases {
   type Attr = Int
   type AttrValue = Int
@@ -15,7 +17,7 @@ import utils._
 trait Classifier {
   def apply(xs: AttrValueSeq): Class
 
-  def performanceOn(ds: Dataset) = {
+  def performanceOn(ds: Dataset): (Int, Int, Double) = {
     val numCorrect = ds.count(x => this(x.attrs) == x.cls)
     (numCorrect, ds.size, numCorrect/ds.size.toDouble)
   }

@@ -1,3 +1,5 @@
+package adaboost;
+
 object utils {
   abstract class AnsiColor(val code: String) {
     def apply(x: Any) = code + x + "\033[1;m"

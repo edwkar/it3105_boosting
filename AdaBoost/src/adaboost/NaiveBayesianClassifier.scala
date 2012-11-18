@@ -1,10 +1,12 @@
+package adaboost;
+
 import aliases._
 
 class NaiveBayesianClassifier(dataset: Dataset) extends Classifier {
-  type Key = (Class, Attr, AttrValue)
+type Key = (Class, Attr, AttrValue)
   type Probability = Double
 
-  val minWeight = dataset.map(_.weight).min
+  val minWeight = 0.01 * 1.0/dataset.size //1e-5 //math.max(1e-10, dataset.map(_.weight).min)
 
   override def apply(xs: AttrValueSeq) = {
     def calc(attrs: List[Attr], scores: Map[Class, Probability]): Class =
@@ -12,19 +14,23 @@ class NaiveBayesianClassifier(dataset: Dataset) extends Classifier {
         case Nil => scores.maxBy(_._2)._1
         case (a::as) =>
           val newScores = scores.map {
-            case (c, p) => c -> p * p_v_a_c(c, a, xs(a))
+            case (c, p) => {
+              assert(p != 0)
+              assert(p_v_a_c(c, a, xs(a)) != 0)
+              assert(p * p_v_a_c(c, a, xs(a)) != 0)
+              c -> p * p_v_a_c(c, a, xs(a))
+            }
           }
-          //printf("%.8f\n", normalizedScores.min)
-          // Potential for numerical underflow.
           val normalizedScores =
-            if (newScores.exists(_._2 < 1e-50))
-              newScores.mapValues { _ * 1e50 }
+            if (newScores.exists(_._2 < 1e-75))
+              newScores.mapValues { _ * 1e75 }
             else
               newScores
 
-          //printf("%.8f\n", normalizedScores.min)
-          //if (normalizedScores.exists(_._2 == 0.0))
-          //  throw new Exception("Numerical underflow in NBC calculation!")
+          if (normalizedScores.exists(_._2 == 0.0))
+            throw new Exception("Numerical underflow in NBC calculation!")
+          if (normalizedScores.exists(_._2.isInfinite))
+            throw new Exception("Numerical overflow in NBC calculation!")
           calc(as, normalizedScores)
       }
 
@@ -46,7 +52,8 @@ class NaiveBayesianClassifier(dataset: Dataset) extends Classifier {
     } yield {
       val xs = classInstances.filter(_.attrs(attr) == value).toList
       val key = (cls, attr, value)
-      key -> xs.map(_.weight).sorted.sum /
-                classInstances.toList.map(_.weight).sorted.sum
+      val p = xs.map(_.weight).sum /
+                classInstances.toList.map(_.weight).sum
+      key -> (if (p == 0.0) minWeight else p)
     }).seq.toMap
 }

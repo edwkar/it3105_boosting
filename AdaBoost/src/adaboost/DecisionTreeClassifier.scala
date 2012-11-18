@@ -1,3 +1,5 @@
+package adaboost;
+
 import aliases._
 import utils._
 

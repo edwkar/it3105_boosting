@@ -1,0 +1,33 @@
+\documentclass[a4paper,9pt]{article}
+
+\usepackage{a4}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{sidecap}
+\usepackage{xcolor}
+
+\title{Boosting diverse classifiers for fun and profit}
+\author{Edvard K. Karlsen}
+\date {}
+
+\begin{document}
+
+\maketitle
+
+\begin{SCfigure}
+  \label{fig:adaboost_acc_kr-vs-kp_dt3}
+  \begin{centering}
+    \includegraphics[width=0.60\textwidth]{adaboost_acc_kr-vs-kp_dt3.png}
+    \caption{
+        AdaBoost \textbf{training} and
+        \textbf{{\color{red}{testing}}} accuracy on the \emph{King-Rook vs.
+        King-Pawn} data set. The individual hypotheses are unpruned decision
+        trees with maximum depth three.
+        The graph shows the averages for 20 random $67\%$-splits of the data
+        set.
+    }
+  \end{centering}
+\end{SCfigure}
+
+\end{document}
